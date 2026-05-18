@@ -3,10 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <title>Candy Orb Idle</title>
 
   <link rel="stylesheet" href="styles.css" />
 
+  <!-- JS FILES (MUST ALL BE IN SAME FOLDER AS INDEX.HTML) -->
   <script src="config.js" defer></script>
   <script src="state.js" defer></script>
   <script src="data.js" defer></script>
@@ -16,15 +18,22 @@
   <script src="save.js" defer></script>
   <script src="main.js" defer></script>
 </head>
+
 <body>
+
   <div id="rainContainer"></div>
 
   <div id="game">
+
+    <!-- LEFT SIDE -->
     <div id="left">
+
       <div id="topbar">
-        <div id="prestigeBadge" title="Prestige points are permanent and give +10% production per level">
+
+        <div id="prestigeBadge">
           ★ <span id="prestigeTop">0</span>
         </div>
+
         <div class="tabs">
           <button class="tab active" data-tab="shop">Shop</button>
           <button class="tab" data-tab="upgrades">Upgrades</button>
@@ -33,6 +42,7 @@
           <button class="tab" data-tab="achievements">Achievements</button>
           <button class="tab" data-tab="settings">Settings</button>
         </div>
+
       </div>
 
       <div id="shop" class="panel active"></div>
@@ -41,63 +51,80 @@
       <div id="prestige" class="panel"></div>
       <div id="achievements" class="panel"></div>
       <div id="settings" class="panel"></div>
+
     </div>
 
+    <!-- RIGHT SIDE -->
     <div id="right">
+
       <h1>Candy Orb</h1>
-      <img id="orbImg" class="orb" src="orb.png.png" alt="Candy Orb" onerror="this.style.display='none'">
+
+      <img
+        id="orbImg"
+        class="orb"
+        src="orb.png.png"
+        alt="Candy Orb"
+        draggable="false"
+        onerror="this.style.display='none'; document.getElementById('orbFallback').style.display='block';"
+      />
+
+      <!-- fallback orb (SVG) -->
       <svg id="orbFallback" class="orb" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" style="display:none;">
         <defs>
-          <radialGradient id="orbGradient" cx="40%" cy="40%">
-            <stop offset="0%" style="stop-color:#ec4899;stop-opacity:1" />
-            <stop offset="60%" style="stop-color:#a78bfa;stop-opacity:1" />
-            <stop offset="100%" style="stop-color:#5b21b6;stop-opacity:1" />
+          <radialGradient id="orbGradient">
+            <stop offset="0%" stop-color="#ec4899"/>
+            <stop offset="60%" stop-color="#a78bfa"/>
+            <stop offset="100%" stop-color="#5b21b6"/>
           </radialGradient>
-          <filter id="orbGlow">
-            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
-            <feMerge>
-              <feMergeNode in="coloredBlur"/>
-              <feMergeNode in="SourceGraphic"/>
-            </feMerge>
-          </filter>
         </defs>
-        <circle cx="100" cy="100" r="95" fill="url(#orbGradient)" filter="url(#orbGlow)" />
+        <circle cx="100" cy="100" r="95" fill="url(#orbGradient)" />
         <circle cx="75" cy="75" r="30" fill="rgba(255,255,255,0.25)" />
       </svg>
 
+      <!-- STATS -->
       <div class="stats">
+
         <div class="stat-row">
-          <span class="stat-label">Candy Orbs:</span>
-          <span class="stat-value" id="candyOrbs">0</span>
+          <span>Candy Orbs:</span>
+          <span id="candyOrbs">0</span>
         </div>
+
         <div class="stat-row">
-          <span class="stat-label">Candy/sec:</span>
-          <span class="stat-value" id="cps">0</span>
+          <span>Candy/sec:</span>
+          <span id="cps">0</span>
         </div>
+
         <div class="stat-row">
-          <span class="stat-label">Click Power:</span>
-          <span class="stat-value" id="clickPower">1</span>
+          <span>Click Power:</span>
+          <span id="clickPower">1</span>
         </div>
+
         <div class="stat-row">
-          <span class="stat-label">Crit Chance:</span>
-          <span class="stat-value" id="critChance">10%</span>
+          <span>Crit Chance:</span>
+          <span id="critChance">10%</span>
         </div>
+
         <div class="stat-row">
-          <span class="stat-label">Hot Streak:</span>
-          <span class="stat-value" id="hotStreak">0</span>
+          <span>Hot Streak:</span>
+          <span id="hotStreak">0</span>
         </div>
+
         <div class="stat-row">
-          <span class="stat-label">Prestige Level:</span>
-          <span class="stat-value" id="prestigeLevel">0</span>
+          <span>Prestige Level:</span>
+          <span id="prestigeLevel">0</span>
         </div>
+
       </div>
 
-      <div id="msg" style="margin:0;padding:8px 12px;"></div>
+      <div id="msg"></div>
 
       <div class="legend">
-        Click the orb to gain candy. Buy buildings for passive income. Each achievement boosts all buildings by 5%. Prestige at 100,000 earned to gain permanent points.
+        Click the orb to gain candy. Buy buildings for passive income. Prestige for permanent boosts.
       </div>
+
     </div>
+
   </div>
+
 </body>
 </html>
