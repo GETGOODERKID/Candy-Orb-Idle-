@@ -2,7 +2,6 @@
   const { els, state } = window.COI;
   const cfg = window.COI_CONFIG;
 
-  // Candy colors/gradients (restored look, still uses your existing SVG approach)
   const candyColors = [
     { grad1: "#ec4899", grad2: "#c73b8e", grad3: "#7a1f4f" },
     { grad1: "#a78bfa", grad2: "#8b5cf6", grad3: "#5b21b6" },
@@ -10,7 +9,6 @@
     { grad1: "#fbbf24", grad2: "#f59e0b", grad3: "#b45309" },
     { grad1: "#10b981", grad2: "#059669", grad3: "#065f46" },
     { grad1: "#f43f5e", grad2: "#be185d", grad3: "#831843" },
-    { grad1: "#8b5cf6", grad2: "#6d28d9", grad3: "#4c1d95" },
     { grad1: "#3b82f6", grad2: "#1d4ed8", grad3: "#1e3a8a" },
   ];
 
@@ -26,75 +24,89 @@
   function playTone(freq=330, duration=0.05, type="square", gainAmount=1, soundType="click") {
     const ctx = ensureAudio();
     if (!ctx) return;
+
     let soundVol = state.soundVolume;
-    if (soundType==="click")   soundVol *= state.clickSoundVol;
-    else if (soundType==="buy")soundVol *= state.buySoundVol;
-    else if (soundType==="crit")soundVol *= state.critSoundVol;
-    else if (soundType==="prestige")soundVol *= state.prestigeSoundVol;
+
+    if (soundType === "click") soundVol *= state.clickSoundVol;
+    else if (soundType === "buy") soundVol *= state.buySoundVol;
+    else if (soundType === "crit") soundVol *= state.critSoundVol;
+    else if (soundType === "prestige") soundVol *= state.prestigeSoundVol;
+
     const finalGain = gainAmount * soundVol * 0.15;
+
     const o = ctx.createOscillator();
     const g = ctx.createGain();
-    o.type = type; o.frequency.value = freq;
-    g.gain.value = 0;
-    o.connect(g); g.connect(ctx.destination);
+
+    o.type = type;
+    o.frequency.value = freq;
+
+    o.connect(g);
+    g.connect(ctx.destination);
+
     const now = ctx.currentTime;
+
     g.gain.setValueAtTime(0, now);
     g.gain.linearRampToValueAtTime(finalGain, now + duration * 0.1);
     g.gain.exponentialRampToValueAtTime(0.001, now + duration);
-    o.start(now); o.stop(now + duration + 0.01);
+
+    o.start(now);
+    o.stop(now + duration + 0.01);
   }
 
-  function playClickSound()  { playTone(420, 0.04, "square", 3, "click"); }
-  function playBuySound()    { playTone(580, 0.08, "triangle", 1.2, "buy"); }
-  function playCritSound()   { playTone(780, 0.1, "sawtooth", 1.5, "crit"); }
-  function playPrestigeSound(){ playTone(220,0.15,"sine",1.2,"prestige"); }
+  function playClickSound() { playTone(420, 0.04, "square", 3, "click"); }
+  function playBuySound() { playTone(580, 0.08, "triangle", 1.2, "buy"); }
+  function playCritSound() { playTone(780, 0.1, "sawtooth", 1.5, "crit"); }
+  function playPrestigeSound() { playTone(220, 0.15, "sine", 1.2, "prestige"); }
 
   function shake() {
     if (state.reduceMotion) return;
-    els.game.classList.remove("shake"); void els.game.offsetWidth; els.game.classList.add("shake");
+    els.game.classList.remove("shake");
+    void els.game.offsetWidth;
+    els.game.classList.add("shake");
   }
 
   function spawnParticle(text, x, y, color="white") {
     if (!state.particles || state.reduceMotion) return;
+
     const p = document.createElement("div");
     p.className = "particle";
     p.textContent = text;
     p.style.left = `${x}px`;
     p.style.top = `${y}px`;
     p.style.color = color;
+
     document.body.appendChild(p);
-    setTimeout(()=>p.remove(), 750);
+    setTimeout(() => p.remove(), 750);
   }
 
   let lastWaterfallSpawnAt = 0;
+
+  // 🌊 FIXED WATERFALL SYSTEM
   function spawnWaterfall(nowMs) {
-    if (!state.waterfall || state.reduceMotion) return;
-    if (state.candyOrbs < cfg.waterfallMinOnHand) return;
+
+    // ❌ HARD FIX: must be unlocked first
+    if (!state.waterfallUnlocked) return;
+
+    if (!state.particles || state.reduceMotion) return;
 
     const minDelayMs = 1000 / Math.max(1, cfg.waterfallMaxDropsPerSecond);
+
     if (nowMs - lastWaterfallSpawnAt < minDelayMs) return;
     lastWaterfallSpawnAt = nowMs;
 
-    // Intensity steps based on on-hand candy.
-    let intensity = 0;
-    const v = state.candyOrbs;
-    if (v >= 1e18) intensity = 55;
-    else if (v >= 1e15) intensity = 50;
-    else if (v >= 1e12) intensity = 45;
-    else if (v >= 1e9) intensity = 35;
-    else if (v >= 1e6) intensity = 22;
-    else if (v >= 1e3) intensity = 8;
-    if (intensity === 0) return;
+    // 🔥 No longer depends on current candy (THIS FIXES YOUR BUG)
+    const intensity = 25;
 
-    // Probabilistic extra drop so it feels alive without flooding DOM.
-    const drops = 1 + (Math.random() < Math.min(0.6, intensity / 100) ? 1 : 0);
+    const drops = 1 + (Math.random() < 0.4 ? 1 : 0);
+
     for (let i = 0; i < drops; i++) {
-      const rightX = window.innerWidth * 0.6;
-      const x = rightX + Math.random() * (window.innerWidth * 0.4 - 80);
+      const x = window.innerWidth * (0.6 + Math.random() * 0.35);
       const y = -80;
+
       const duration = 2.5 + Math.random() * 3;
-      const colors = candyColors[Math.floor(Math.random() * candyColors.length)];
       const size = 44 + Math.random() * 28;
+
+      const colors = candyColors[Math.floor(Math.random() * candyColors.length)];
 
       const drop = document.createElement("div");
       drop.className = "raindrop";
@@ -106,10 +118,10 @@
 
       const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
       svg.setAttribute("viewBox", "0 0 100 100");
-      svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
 
       const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
       const grad = document.createElementNS("http://www.w3.org/2000/svg", "radialGradient");
+
       const gradId = `candy-grad-${nowMs}-${Math.random()}`;
       grad.setAttribute("id", gradId);
       grad.setAttribute("cx", "35%");
@@ -130,6 +142,7 @@
       grad.appendChild(stop1);
       grad.appendChild(stop2);
       grad.appendChild(stop3);
+
       defs.appendChild(grad);
       svg.appendChild(defs);
 
@@ -138,6 +151,7 @@
       circle.setAttribute("cy", "50");
       circle.setAttribute("r", "45");
       circle.setAttribute("fill", `url(#${gradId})`);
+
       svg.appendChild(circle);
 
       const highlight = document.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -145,10 +159,12 @@
       highlight.setAttribute("cy", "35");
       highlight.setAttribute("r", "15");
       highlight.setAttribute("fill", "rgba(255,255,255,0.3)");
+
       svg.appendChild(highlight);
 
       drop.appendChild(svg);
       els.rainContainer.appendChild(drop);
+
       setTimeout(() => drop.remove(), duration * 1000);
     }
   }
