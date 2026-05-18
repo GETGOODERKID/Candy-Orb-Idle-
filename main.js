@@ -2,9 +2,6 @@
   const { els, state } = window.COI;
   const { econ, ui, fx, save } = window.COI;
 
-  // -------------------------
-  // ACHIEVEMENTS
-  // -------------------------
   function checkAchievements() {
     const list = window.COI.achievements || [];
 
@@ -28,9 +25,6 @@
     }
   }
 
-  // -------------------------
-  // ORB CLICK
-  // -------------------------
   function clickOrb(ev) {
     state.totalClicks += 1;
 
@@ -64,7 +58,14 @@
 
     state.candyOrbs += gain;
     state.totalEarned += gain;
-    state.totalCandyEarned += gain; // ✅ IMPORTANT FIX
+    state.totalCandyEarned += gain;
+
+    // 🔥 ONLY FIX ADDED HERE (IMPORTANT)
+    if (!state.waterfallUnlocked && state.totalCandyEarned >= 1000) {
+      state.waterfallUnlocked = true;
+      ui.msg("🌊 Waterfall Unlocked!");
+      save.saveGame(); // <-- THIS is the fix
+    }
 
     fx.playClickSound();
 
@@ -72,9 +73,6 @@
     ui.updateHUD();
   }
 
-  // -------------------------
-  // BUILDINGS
-  // -------------------------
   function buyBuilding(id) {
     const b = econ.getBuilding(id);
     if (!b) return;
@@ -127,9 +125,6 @@
     ui.updateAll();
   }
 
-  // -------------------------
-  // UPGRADES
-  // -------------------------
   function buyUpgrade(id) {
     const upg = state.upgrades.find(u => u.id === id);
     if (!upg) return;
@@ -153,9 +148,6 @@
     ui.updateAll();
   }
 
-  // -------------------------
-  // PRESTIGE
-  // -------------------------
   function prestigeReset() {
     const gain = econ.getPrestigeGain();
 
@@ -217,13 +209,11 @@
     ui.updateAll();
   }
 
-  // -------------------------
-  // WATERFALL FIX (IMPORTANT PART)
-  // -------------------------
   function updateWaterfall() {
     if (!state.waterfallUnlocked && state.totalCandyEarned >= 1000) {
       state.waterfallUnlocked = true;
       ui.msg("🌊 Waterfall Unlocked!");
+      save.saveGame(); // 🔥 SECOND SAFE FIX (prevents refresh loss)
     }
 
     if (state.waterfallUnlocked) {
@@ -231,9 +221,6 @@
     }
   }
 
-  // -------------------------
-  // EVENT HANDLERS
-  // -------------------------
   function attachDelegatedHandlers() {
     els.shop.addEventListener("click", (ev) => {
       const target = ev.target.closest?.("button");
@@ -259,9 +246,6 @@
     });
   }
 
-  // -------------------------
-  // TABS
-  // -------------------------
   document.querySelectorAll(".tab").forEach(tab => {
     tab.addEventListener("click", () => {
       document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
@@ -274,9 +258,6 @@
     });
   });
 
-  // -------------------------
-  // ORB CLICK
-  // -------------------------
   const orbImg = document.getElementById("orbImg");
   const orbFallback = document.getElementById("orbFallback");
 
@@ -288,9 +269,6 @@
     orbFallback.style.display = "block";
   });
 
-  // -------------------------
-  // KEYBINDS
-  // -------------------------
   document.addEventListener("keydown", (ev) => {
     if (!els.shop.classList.contains("active")) return;
 
@@ -302,9 +280,6 @@
 
   attachDelegatedHandlers();
 
-  // -------------------------
-  // GAME LOOP
-  // -------------------------
   setInterval(() => {
     if (!state.paused) {
       const cps = econ.getCPS();
@@ -312,9 +287,9 @@
 
       state.candyOrbs += gain;
       state.totalEarned += gain;
-      state.totalCandyEarned += gain; // ✅ IMPORTANT FIX
+      state.totalCandyEarned += gain;
 
-      updateWaterfall(); // 🌊 FIXED HERE
+      updateWaterfall();
     }
 
     state.lastTick = Date.now();
@@ -326,14 +301,8 @@
     checkAchievements();
   }, 100);
 
-  // -------------------------
-  // SAVE LOOP
-  // -------------------------
   setInterval(save.saveGame, 10000);
 
-  // -------------------------
-  // BOOT
-  // -------------------------
   save.loadGame();
   ui.updateAll();
 })();
