@@ -20,12 +20,19 @@
   };
 
   const state = {
+    // 💰 CURRENT CURRENCY (changes up/down)
     candyOrbs: 0,
+
+    // ⭐ LIFETIME CURRENCY (NEVER decreases)
+    totalCandyEarned: 0,
+
     clickPower: 1,
     critChance: 0.10,
     critMult: 1,
+
     prestige: 0,
     prestigePoints: 0,
+
     buildingMult: 1,
     clickMult: 1,
     costMult: 1,
@@ -53,25 +60,26 @@
     totalCrits: 0,
     totalSold: 0,
     totalSoldValue: 0,
+
     hotStreak: 0,
     bestHotStreak: 0,
+
     lastPrestigeEarned: 0,
 
     buildings: [],
     upgrades: [],
     prestigeUpgrades: [],
 
-    waterfall: true,
+    waterfallUnlocked: false, // ✅ IMPORTANT FIX
+
     paused: false,
     reduceMotion: false,
 
     startedAt: Date.now(),
     lastTick: Date.now(),
 
-    // UI-only
     buyMode: 1, // 1 | 10 | 100 | "max"
 
-    // Runtime-only
     _audioCtx: null,
   };
 
@@ -79,4 +87,3 @@
   window.COI.els = els;
   window.COI.state = state;
 })();
-
