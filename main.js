@@ -2,6 +2,50 @@
   const { els, state } = window.COI;
   const { econ, ui, fx, save } = window.COI;
 
+  // =========================
+  // COMBO UI
+  // =========================
+  const comboText = document.getElementById("comboText");
+  const comboBar = document.getElementById("comboBar");
+
+  function updateComboUI() {
+    const c = state.comboChain || 0;
+
+    if (comboText) comboText.textContent = `COMBO x${c}`;
+
+    const percent = Math.min(100, (c / 20) * 100);
+    if (comboBar) comboBar.style.width = percent + "%";
+  }
+
+  // =========================
+  // 💥 COMBO EXPLOSION
+  // =========================
+  function comboExplosion(amount, x, y) {
+    if (!amount || amount < 3) return;
+
+    const bonus = amount * state.clickPower * 2;
+
+    state.candyOrbs += bonus;
+    state.totalEarned += bonus;
+    state.totalCandyEarned += bonus;
+
+    fx.shake();
+
+    ui.msg(`💥 COMBO BREAK x${amount}! +${Math.floor(bonus)}`);
+
+    for (let i = 0; i < Math.min(14, amount); i++) {
+      fx.spawnParticle(
+        `+${Math.floor(bonus / 10)}`,
+        x + (Math.random() * 200 - 100),
+        y + (Math.random() * 200 - 100),
+        "#fbbf24"
+      );
+    }
+  }
+
+  // =========================
+  // ACHIEVEMENTS
+  // =========================
   function checkAchievements() {
     const list = window.COI.achievements || [];
 
@@ -15,6 +59,7 @@
         })
       ) {
         state.achievementsDone.add(a.id);
+
         a.reward({
           updateAchievementBonus: econ.updateAchievementBonus
         });
@@ -25,6 +70,9 @@
     }
   }
 
+  // =========================
+  // ORB CLICK (COMBO SYSTEM)
+  // =========================
   function clickOrb(ev) {
     state.totalClicks += 1;
 
@@ -39,18 +87,35 @@
       state.totalCrits += 1;
       state.hotStreak += 1;
 
-      if (state.hotStreak > state.bestHotStreak) {
-        state.bestHotStreak = state.hotStreak;
+      state.comboChain = (state.comboChain || 0) + 1;
+      state.comboTimer = 1.5;
+
+      if (state.comboChain > state.bestCombo) {
+        state.bestCombo = state.comboChain;
       }
 
-      multiplier = Math.max(2, Math.round(2 * state.critMult));
+      const comboMult = 1 + state.comboChain * 0.12;
+
+      multiplier = Math.max(
+        2,
+        Math.round(2 * state.critMult * comboMult)
+      );
 
       fx.playCritSound();
       fx.shake();
-      fx.spawnParticle(`x${multiplier}`, x, y, "#f1c04d");
-      ui.msg(`Crit x${multiplier}`);
+
+      fx.spawnParticle(`COMBO x${state.comboChain}`, x, y, "#f1c04d");
+      ui.msg(`Combo x${state.comboChain} → Crit x${multiplier}`);
     } else {
       state.hotStreak = 0;
+
+      const broken = state.comboChain;
+
+      // 💥 COMBO BREAK EXPLOSION
+      comboExplosion(broken, x, y);
+
+      state.comboChain = 0;
+
       fx.spawnParticle("+", x, y);
     }
 
@@ -60,19 +125,24 @@
     state.totalEarned += gain;
     state.totalCandyEarned += gain;
 
-    // 🔥 ONLY FIX ADDED HERE (IMPORTANT)
+    // 🌊 WATERFALL UNLOCK
     if (!state.waterfallUnlocked && state.totalCandyEarned >= 1000) {
       state.waterfallUnlocked = true;
       ui.msg("🌊 Waterfall Unlocked!");
-      save.saveGame(); // <-- THIS is the fix
+      save.saveGame();
     }
 
     fx.playClickSound();
 
     checkAchievements();
     ui.updateHUD();
+
+    updateComboUI();
   }
 
+  // =========================
+  // BUILDINGS
+  // =========================
   function buyBuilding(id) {
     const b = econ.getBuilding(id);
     if (!b) return;
@@ -83,10 +153,7 @@
     }
 
     const amount = ui.getResolvedBuyCount(b);
-    if (amount <= 0) {
-      ui.msg("Can't buy any right now", false);
-      return;
-    }
+    if (amount <= 0) return;
 
     const price = econ.getBuildingTotalCost(b, amount);
 
@@ -125,6 +192,9 @@
     ui.updateAll();
   }
 
+  // =========================
+  // UPGRADES
+  // =========================
   function buyUpgrade(id) {
     const upg = state.upgrades.find(u => u.id === id);
     if (!upg) return;
@@ -148,72 +218,42 @@
     ui.updateAll();
   }
 
+  // =========================
+  // PRESTIGE
+  // =========================
   function prestigeReset() {
     const gain = econ.getPrestigeGain();
 
-    if (gain < 1) {
-      ui.msg("Need 100,000 earned to prestige", false);
-      return;
-    }
+    if (gain < 1) return ui.msg("Need 100,000 earned", false);
 
-    if (!confirm(`Prestige for ${gain} point(s)?`)) return;
+    if (!confirm(`Prestige for ${gain}?`)) return;
 
     state.prestige += gain;
     state.prestigePoints += gain;
-    state.lastPrestigeEarned = state.prestigePoints;
 
     state.totalEarned = 0;
     state.totalCandyEarned = 0;
-
     state.candyOrbs = 0;
-    state.clickPower = 1;
-    state.critChance = 0.10;
-    state.critMult = 1;
-    state.hotStreak = 0;
 
-    state.clickUpgradesBought.clear();
-
-    for (const b of state.buildings) {
-      b.count = 0;
-      b.bonusMult = 1;
-    }
+    state.comboChain = 0;
+    state.bestCombo = 0;
 
     fx.playPrestigeSound();
     fx.shake();
 
     ui.msg(`Prestige +${gain}`);
-
     ui.updateAll();
     save.saveGame();
   }
 
-  function buyPrestigeUpgrade(id) {
-    const upg = state.prestigeUpgrades.find(p => p.id === id);
-    if (!upg) return;
-
-    if (state.prestigeUpgradesBought.has(id)) return;
-
-    if (state.prestigePoints < upg.cost) {
-      ui.msg(`Need ${upg.cost - state.prestigePoints} more`, false);
-      return;
-    }
-
-    state.prestigePoints -= upg.cost;
-    state.prestigeUpgradesBought.add(id);
-
-    upg.effect();
-
-    fx.playPrestigeSound();
-    ui.msg(`${upg.name} purchased`);
-
-    ui.updateAll();
-  }
-
+  // =========================
+  // WATERFALL
+  // =========================
   function updateWaterfall() {
     if (!state.waterfallUnlocked && state.totalCandyEarned >= 1000) {
       state.waterfallUnlocked = true;
       ui.msg("🌊 Waterfall Unlocked!");
-      save.saveGame(); // 🔥 SECOND SAFE FIX (prevents refresh loss)
+      save.saveGame();
     }
 
     if (state.waterfallUnlocked) {
@@ -221,65 +261,9 @@
     }
   }
 
-  function attachDelegatedHandlers() {
-    els.shop.addEventListener("click", (ev) => {
-      const target = ev.target.closest?.("button");
-      if (!target) return;
-
-      if (target.dataset.buyBuilding) buyBuilding(target.dataset.buyBuilding);
-      else if (target.dataset.sellBuilding) sellBuilding(target.dataset.sellBuilding);
-    });
-
-    els.upgrades.addEventListener("click", (ev) => {
-      const target = ev.target.closest?.("button");
-      if (!target) return;
-
-      if (target.dataset.buyUpgrade) buyUpgrade(target.dataset.buyUpgrade);
-    });
-
-    els.prestige.addEventListener("click", (ev) => {
-      const target = ev.target.closest?.("button");
-      if (!target) return;
-
-      if (target.id === "prestigeBtn") prestigeReset();
-      else if (target.dataset.buyPrestige) buyPrestigeUpgrade(target.dataset.buyPrestige);
-    });
-  }
-
-  document.querySelectorAll(".tab").forEach(tab => {
-    tab.addEventListener("click", () => {
-      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-
-      tab.classList.add("active");
-
-      const panel = document.getElementById(tab.dataset.tab);
-      if (panel) panel.classList.add("active");
-    });
-  });
-
-  const orbImg = document.getElementById("orbImg");
-  const orbFallback = document.getElementById("orbFallback");
-
-  orbImg.addEventListener("click", clickOrb);
-  orbFallback.addEventListener("click", clickOrb);
-
-  orbImg.addEventListener("error", () => {
-    orbImg.style.display = "none";
-    orbFallback.style.display = "block";
-  });
-
-  document.addEventListener("keydown", (ev) => {
-    if (!els.shop.classList.contains("active")) return;
-
-    if (ev.key === "1") ui.setBuyMode(1);
-    else if (ev.key === "2") ui.setBuyMode(10);
-    else if (ev.key === "3") ui.setBuyMode(100);
-    else if (ev.key === "4") ui.setBuyMode("max");
-  });
-
-  attachDelegatedHandlers();
-
+  // =========================
+  // GAME LOOP
+  // =========================
   setInterval(() => {
     if (!state.paused) {
       const cps = econ.getCPS();
@@ -289,6 +273,19 @@
       state.totalEarned += gain;
       state.totalCandyEarned += gain;
 
+      // 🔥 COMBO DECAY
+      if (state.comboTimer > 0) {
+        state.comboTimer -= 0.1;
+        if (state.comboTimer <= 0) {
+          const broken = state.comboChain;
+
+          comboExplosion(broken, window.innerWidth / 2, window.innerHeight / 2);
+
+          state.comboChain = 0;
+        }
+      }
+
+      updateComboUI();
       updateWaterfall();
     }
 
@@ -301,8 +298,9 @@
     checkAchievements();
   }, 100);
 
-  setInterval(save.saveGame, 10000);
-
+  // =========================
+  // BOOT
+  // =========================
   save.loadGame();
   ui.updateAll();
 })();
