@@ -1,247 +1,258 @@
 (() => {
-  const { state } = window.COI;
-
-  const SAVE_KEY = "candy_orb_idle_save_v1";
+  const COI = window.COI || (window.COI = {});
+  const state = COI.state;
+  const els = COI.els;
+  const econ = COI.econ || {};
+  const fx = COI.fx || {};
+  const save = COI.save || {};
 
   // =========================================================
-  // SAVE GAME
+  // MESSAGE SYSTEM
   // =========================================================
-  function saveGame() {
-    try {
-      const data = {
-        candyOrbs: state.candyOrbs,
-        totalCandyEarned: state.totalCandyEarned,
+  function msg(text, good = true) {
+    if (!els.msg) return;
+    els.msg.textContent = text;
+    els.msg.style.color = good ? "var(--accent)" : "var(--bad)";
+  }
 
-        clickPower: state.clickPower,
-        critChance: state.critChance,
-        critMult: state.critMult,
+  // =========================================================
+  // BUY MODE
+  // =========================================================
+  function setBuyMode(mode) {
+    state.buyMode = mode;
+    renderShop();
+  }
 
-        prestige: state.prestige,
-        prestigePoints: state.prestigePoints,
+  function getBuyCount(b) {
+    if (state.buyMode === "max") return econ.getMaxAffordableCount(b);
+    return Math.max(1, Number(state.buyMode) || 1);
+  }
 
-        buildingMult: state.buildingMult,
-        clickMult: state.clickMult,
-        costMult: state.costMult,
-        prestigeGainMult: state.prestigeGainMult,
-        cpsFromUpgrades: state.cpsFromUpgrades,
-        achievementBonus: state.achievementBonus,
+  function getSellCount(b) {
+    if (state.buyMode === "max") return b.count;
+    return Math.max(1, Number(state.buyMode) || 1);
+  }
 
-        useShortFormat: state.useShortFormat,
-        sound: state.sound,
-        soundVolume: state.soundVolume,
-        clickSoundVol: state.clickSoundVol,
-        buySoundVol: state.buySoundVol,
-        critSoundVol: state.critSoundVol,
-        prestigeSoundVol: state.prestigeSoundVol,
-        particles: state.particles,
-        autoSave: state.autoSave,
+  // =========================================================
+  // HUD
+  // =========================================================
+  function updateHUD() {
+    if (!state || !els) return;
 
-        totalClicks: state.totalClicks,
-        totalEarned: state.totalEarned,
-        totalSpent: state.totalSpent,
-        totalCrits: state.totalCrits,
-        totalSold: state.totalSold,
-        totalSoldValue: state.totalSoldValue,
+    els.candyOrbs.textContent = econ.formatNumber(state.candyOrbs || 0);
+    els.cps.textContent = econ.formatNumber(econ.getCPS?.() || 0, 2);
+    els.clickPower.textContent = econ.formatNumber(state.clickPower || 1);
 
-        hotStreak: state.hotStreak,
-        bestHotStreak: state.bestHotStreak,
+    els.critChance.textContent =
+      (Math.min(99, (state.critChance || 0) * 100)).toFixed(1) + "%";
 
-        lastPrestigeEarned: state.lastPrestigeEarned,
+    els.prestigeLevel.textContent = state.prestige || 0;
+    els.prestigeTop.textContent = state.prestige || 0;
+  }
 
-        buildings: state.buildings,
+  // =========================================================
+  // SHOP
+  // =========================================================
+  function renderShop() {
+    if (!els.shop) return;
 
-        clickUpgradesBought: Array.from(state.clickUpgradesBought),
-        prestigeUpgradesBought: Array.from(state.prestigeUpgradesBought),
-        achievementsDone: Array.from(state.achievementsDone),
+    const scrollTop = els.shop.scrollTop;
+    let html = "";
 
-        waterfallUnlocked: state.waterfallUnlocked,
+    html += `
+      <div class="card">
+        <div class="section-title">Buy Amount</div>
+        <div class="qty-toggle">
+          <button onclick="COI.ui.setBuyMode(1)" class="main-btn">1x</button>
+          <button onclick="COI.ui.setBuyMode(10)" class="main-btn">10x</button>
+          <button onclick="COI.ui.setBuyMode(100)" class="main-btn">100x</button>
+          <button onclick="COI.ui.setBuyMode('max')" class="main-btn">Max</button>
+        </div>
+      </div>
+    `;
 
-        paused: state.paused,
-        reduceMotion: state.reduceMotion,
+    for (const b of state.buildings || []) {
+      const buyCount = getBuyCount(b);
+      const cost = econ.getBuildingTotalCost?.(b, buyCount) || 0;
+      const canBuy = state.candyOrbs >= cost;
 
-        startedAt: state.startedAt,
-        lastTick: state.lastTick,
+      const sellCount = getSellCount(b);
+      const sellAmount = Math.min(b.count, sellCount);
+      const refund = econ.getBuildingSellRefund?.(b, sellAmount) || 0;
 
-        buyMode: state.buyMode
+      html += `
+        <div class="building-card">
+          <div class="building-header">
+            <span>${b.name}</span>
+            <span>${b.count}</span>
+          </div>
+
+          <button data-buy="${b.id}" ${canBuy ? "" : "disabled"}>
+            Buy ${buyCount} - ${econ.formatNumber(cost)}
+          </button>
+
+          <button data-sell="${b.id}" ${b.count ? "" : "disabled"}>
+            Sell - ${econ.formatNumber(refund)}
+          </button>
+        </div>
+      `;
+    }
+
+    els.shop.innerHTML = html;
+    els.shop.scrollTop = scrollTop;
+
+    // attach clicks
+    els.shop.querySelectorAll("[data-buy]").forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.dataset.buy;
+        COI.main?.buyBuilding?.(id);
       };
+    });
 
-      localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-    } catch (e) {
-      console.warn("Save failed:", e);
-    }
+    els.shop.querySelectorAll("[data-sell]").forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.dataset.sell;
+        COI.main?.sellBuilding?.(id);
+      };
+    });
+  }
+
+  function refreshShopUI() {
+    renderShop();
   }
 
   // =========================================================
-  // LOAD GAME
+  // UPGRADES (MINIMAL SAFE VERSION)
   // =========================================================
-  function loadGame() {
+  function renderUpgrades() {
+    if (!els.upgrades) return;
+
+    let html = "";
+
+    for (const upg of state.upgrades || []) {
+      const owned = state.clickUpgradesBought.has(upg.id);
+      const canBuy = state.candyOrbs >= upg.cost && !owned;
+
+      html += `
+        <button data-upg="${upg.id}" ${canBuy ? "" : "disabled"}>
+          ${upg.name} - ${econ.formatNumber(upg.cost)}
+        </button>
+      `;
+    }
+
+    els.upgrades.innerHTML = html;
+
+    els.upgrades.querySelectorAll("[data-upg]").forEach(btn => {
+      btn.onclick = () => {
+        const id = btn.dataset.upg;
+        COI.main?.buyUpgrade?.(id);
+      };
+    });
+  }
+
+  function refreshUpgradesUI() {
+    renderUpgrades();
+  }
+
+  // =========================================================
+  // STATS / PRESTIGE / ACHIEVEMENTS (SAFE SIMPLE RENDER)
+  // =========================================================
+  function renderStats() {
+    if (!els.stats) return;
+
+    els.stats.innerHTML = `
+      <div class="card">
+        <div class="section-title">Stats</div>
+        <div>Total Earned: ${econ.formatNumber(state.totalEarned || 0)}</div>
+        <div>Total Clicks: ${state.totalClicks || 0}</div>
+      </div>
+    `;
+  }
+
+  function renderPrestige() {
+    if (!els.prestige) return;
+
+    els.prestige.innerHTML = `
+      <div class="card">
+        <div class="section-title">Prestige</div>
+        <button onclick="COI.main?.prestigeReset?.()">
+          Prestige
+        </button>
+      </div>
+    `;
+  }
+
+  function renderAchievements() {
+    if (!els.achievements) return;
+
+    els.achievements.innerHTML = `
+      <div class="card">
+        <div class="section-title">Achievements</div>
+        ${(COI.achievements || [])
+          .map(a => `<div>${a.name}</div>`)
+          .join("")}
+      </div>
+    `;
+  }
+
+  // =========================================================
+  // SETTINGS (SAFE EXPORT FIX)
+  // =========================================================
+  function renderSettings() {
+    if (!els.settings) return;
+
+    let exportData = "";
+
     try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (!raw) return;
-
-      const data = JSON.parse(raw);
-
-      state.candyOrbs = data.candyOrbs ?? 0;
-      state.totalCandyEarned = data.totalCandyEarned ?? 0;
-
-      state.clickPower = data.clickPower ?? 1;
-      state.critChance = data.critChance ?? 0.10;
-      state.critMult = data.critMult ?? 1;
-
-      state.prestige = data.prestige ?? 0;
-      state.prestigePoints = data.prestigePoints ?? 0;
-
-      state.buildingMult = data.buildingMult ?? 1;
-      state.clickMult = data.clickMult ?? 1;
-      state.costMult = data.costMult ?? 1;
-      state.prestigeGainMult = data.prestigeGainMult ?? 1;
-      state.cpsFromUpgrades = data.cpsFromUpgrades ?? 1;
-      state.achievementBonus = data.achievementBonus ?? 1;
-
-      state.useShortFormat = data.useShortFormat ?? true;
-      state.sound = data.sound ?? true;
-      state.soundVolume = data.soundVolume ?? 0.4;
-      state.clickSoundVol = data.clickSoundVol ?? 1.0;
-      state.buySoundVol = data.buySoundVol ?? 0.5;
-      state.critSoundVol = data.critSoundVol ?? 0.5;
-      state.prestigeSoundVol = data.prestigeSoundVol ?? 0.5;
-      state.particles = data.particles ?? true;
-      state.autoSave = data.autoSave ?? true;
-
-      state.totalClicks = data.totalClicks ?? 0;
-      state.totalEarned = data.totalEarned ?? 0;
-      state.totalSpent = data.totalSpent ?? 0;
-      state.totalCrits = data.totalCrits ?? 0;
-      state.totalSold = data.totalSold ?? 0;
-      state.totalSoldValue = data.totalSoldValue ?? 0;
-
-      state.hotStreak = data.hotStreak ?? 0;
-      state.bestHotStreak = data.bestHotStreak ?? 0;
-
-      state.lastPrestigeEarned = data.lastPrestigeEarned ?? 0;
-
-      state.waterfallUnlocked = data.waterfallUnlocked ?? false;
-
-      state.paused = data.paused ?? false;
-      state.reduceMotion = data.reduceMotion ?? false;
-
-      state.startedAt = data.startedAt ?? Date.now();
-      state.lastTick = data.lastTick ?? Date.now();
-
-      state.buyMode = data.buyMode ?? 1;
-
-      if (Array.isArray(data.buildings)) {
-        data.buildings.forEach((b, i) => {
-          if (state.buildings[i]) {
-            state.buildings[i].count = b.count ?? 0;
-          }
-        });
-      }
-
-      state.clickUpgradesBought = new Set(data.clickUpgradesBought || []);
-      state.prestigeUpgradesBought = new Set(data.prestigeUpgradesBought || []);
-      state.achievementsDone = new Set(data.achievementsDone || []);
-
+      exportData = COI.save?.exportState?.() || "";
     } catch (e) {
-      console.warn("Load failed:", e);
-      localStorage.removeItem(SAVE_KEY);
+      exportData = "ERROR EXPORTING SAVE";
     }
+
+    els.settings.innerHTML = `
+      <div class="card">
+        <div class="section-title">Settings</div>
+
+        <button onclick="COI.save?.saveGame?.()">Save</button>
+        <button onclick="COI.save?.resetSave?.()">Reset</button>
+
+        <textarea readonly>${exportData}</textarea>
+      </div>
+    `;
   }
 
   // =========================================================
-  // EXPORT STATE (UI DEPENDS ON THIS)
+  // MASTER UPDATE
   // =========================================================
-  function exportState() {
-    const data = {
-      candyOrbs: state.candyOrbs,
-      totalCandyEarned: state.totalCandyEarned,
-
-      clickPower: state.clickPower,
-      critChance: state.critChance,
-      critMult: state.critMult,
-
-      prestige: state.prestige,
-      prestigePoints: state.prestigePoints,
-
-      buildingMult: state.buildingMult,
-      clickMult: state.clickMult,
-      costMult: state.costMult,
-      prestigeGainMult: state.prestigeGainMult,
-      cpsFromUpgrades: state.cpsFromUpgrades,
-      achievementBonus: state.achievementBonus,
-
-      useShortFormat: state.useShortFormat,
-      sound: state.sound,
-      soundVolume: state.soundVolume,
-      clickSoundVol: state.clickSoundVol,
-      buySoundVol: state.buySoundVol,
-      critSoundVol: state.critSoundVol,
-      prestigeSoundVol: state.prestigeSoundVol,
-      particles: state.particles,
-      autoSave: state.autoSave,
-
-      totalClicks: state.totalClicks,
-      totalEarned: state.totalEarned,
-      totalSpent: state.totalSpent,
-      totalCrits: state.totalCrits,
-      totalSold: state.totalSold,
-      totalSoldValue: state.totalSoldValue,
-
-      hotStreak: state.hotStreak,
-      bestHotStreak: state.bestHotStreak,
-
-      lastPrestigeEarned: state.lastPrestigeEarned,
-
-      buildings: state.buildings,
-
-      clickUpgradesBought: Array.from(state.clickUpgradesBought),
-      prestigeUpgradesBought: Array.from(state.prestigeUpgradesBought),
-      achievementsDone: Array.from(state.achievementsDone),
-
-      waterfallUnlocked: state.waterfallUnlocked,
-
-      paused: state.paused,
-      reduceMotion: state.reduceMotion,
-
-      startedAt: state.startedAt,
-      lastTick: state.lastTick,
-
-      buyMode: state.buyMode
-    };
-
-    return btoa(JSON.stringify(data));
+  function updateAll() {
+    updateHUD();
+    renderShop();
+    renderUpgrades();
+    renderStats();
+    renderPrestige();
+    renderAchievements();
+    renderSettings();
   }
 
   // =========================================================
-  // IMPORT STATE
+  // EXPORT UI MODULE
+  // CRITICAL FIX: THIS WAS YOUR MAIN BUG
   // =========================================================
-  function importState(encoded) {
-    try {
-      const data = JSON.parse(atob(encoded));
-
-      localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-      loadGame();
-    } catch (e) {
-      console.warn("Import failed:", e);
-    }
-  }
-
-  // =========================================================
-  // RESET SAVE
-  // =========================================================
-  function resetSave() {
-    localStorage.removeItem(SAVE_KEY);
-    location.reload();
-  }
-
-  // =========================================================
-  // EXPOSE API
-  // =========================================================
-  window.COI.save = {
-    saveGame,
-    loadGame,
-    resetSave,
-    exportState,
-    importState
+  COI.ui = {
+    msg,
+    setBuyMode,
+    getBuyCount,
+    getSellCount,
+    updateHUD,
+    renderShop,
+    refreshShopUI,
+    renderUpgrades,
+    refreshUpgradesUI,
+    renderStats,
+    renderPrestige,
+    renderAchievements,
+    renderSettings,
+    updateAll
   };
+
 })();
