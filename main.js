@@ -8,34 +8,27 @@
   const save = COI.save;
   const ui = COI.ui;
 
-  function safe(fn) {
-    return (...args) => {
-      try {
-        return fn?.(...args);
-      } catch (e) {
-        console.warn("Game error:", e);
-      }
-    };
-  }
-
+  // =========================
+  // ORB CLICK
+  // =========================
   function clickOrb(e) {
     const x = e?.clientX || innerWidth / 2;
     const y = e?.clientY || innerHeight / 2;
 
+    let gain = state.clickPower * state.clickMult;
+
     const crit = Math.random() < state.critChance;
 
-    let gain = state.clickPower;
-
     if (crit) {
-      state.hotStreak++;
-      gain *= 2;
+      gain *= state.critMult || 2;
+
+      state.totalCrits++;
 
       fx?.playCritSound?.();
       fx?.spawnParticle?.("CRIT!", x, y, "#fbbf24");
 
       ui.msg("Critical hit!");
     } else {
-      state.hotStreak = 0;
       fx?.spawnParticle?.("+", x, y, "#fff");
     }
 
@@ -46,34 +39,49 @@
     ui.updateHUD();
   }
 
+  // =========================
+  // BUILDINGS
+  // =========================
   function buyBuilding(id) {
     const b = econ.getBuilding(id);
     if (!b) return;
 
     const cost = econ.getBuildingTotalCost(b, 1);
-    if (state.candyOrbs < cost) return;
+    if (state.candyOrbs < cost) {
+      ui.msg("Not enough Candy Orbs", false);
+      return;
+    }
 
     state.candyOrbs -= cost;
     b.count++;
 
     ui.msg("Bought " + b.name);
-    ui.updateAll();
+
+    ui.refreshShopUI();
+    ui.updateHUD();
   }
 
   function sellBuilding(id) {
     const b = econ.getBuilding(id);
     if (!b || b.count <= 0) return;
 
+    const refund = econ.getBuildingSellRefund(b, 1);
+
     b.count--;
-    state.candyOrbs += 1;
+    state.candyOrbs += refund;
 
     ui.msg("Sold " + b.name);
-    ui.updateAll();
+
+    ui.refreshShopUI();
+    ui.updateHUD();
   }
 
+  // =========================
+  // UPGRADES
+  // =========================
   function buyUpgrade(id) {
     const u = state.upgrades.find(x => x.id === id);
-    if (!u) return;
+    if (!u || state.clickUpgradesBought.has(id)) return;
 
     if (state.candyOrbs < u.cost) return;
 
@@ -83,16 +91,74 @@
     u.effect?.();
 
     ui.msg("Upgrade bought");
-    ui.updateAll();
-  }
 
-  function loop() {
-    const cps = econ.getCPS();
-    state.candyOrbs += cps / 10;
-
+    ui.refreshUpgradesUI();
     ui.updateHUD();
   }
 
+  // =========================
+  // TAB SYSTEM (FIXED)
+  // =========================
+  function bindTabs() {
+    document.querySelectorAll(".tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const tab = btn.dataset.tab;
+
+        document.querySelectorAll(".panel").forEach(p => {
+          p.classList.remove("active");
+        });
+
+        document.getElementById(tab)?.classList.add("active");
+
+        document.querySelectorAll(".tab").forEach(t => {
+          t.classList.remove("active");
+        });
+
+        btn.classList.add("active");
+      });
+    });
+  }
+
+  // =========================
+  // HOTKEYS (1–4 RESTORED)
+  // =========================
+  function bindHotkeys() {
+    document.addEventListener("keydown", (e) => {
+      if (e.repeat) return;
+
+      if (e.key === "1") ui.setBuyMode(1);
+      if (e.key === "2") ui.setBuyMode(10);
+      if (e.key === "3") ui.setBuyMode(100);
+      if (e.key === "4") ui.setBuyMode("max");
+    });
+  }
+
+  // =========================
+  // GAME LOOP (SMOOTHED)
+  // =========================
+  let last = performance.now();
+
+  function loop(now) {
+    const delta = (now - last) / 1000;
+    last = now;
+
+    if (!state.paused) {
+      const cps = econ.getCPS();
+      const gain = cps * delta;
+
+      state.candyOrbs += gain;
+      state.totalEarned += gain;
+      state.totalCandyEarned += gain;
+
+      ui.updateHUD();
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  // =========================
+  // BIND EVENTS
+  // =========================
   function bind() {
     els.orbImg?.addEventListener("click", clickOrb);
 
@@ -105,14 +171,20 @@
     });
 
     els.upgrades?.addEventListener("click", (e) => {
-      const u = e.target.closest("[data-upgrade]");
-      if (u) buyUpgrade(u.dataset.upgrade);
+      const u = e.target.closest("[data-upg]");
+      if (u) buyUpgrade(u.dataset.upg);
     });
   }
 
+  // =========================
+  // START
+  // =========================
   bind();
+  bindTabs();
+  bindHotkeys();
+
   ui.updateAll();
 
-  setInterval(loop, 100);
+  requestAnimationFrame(loop);
 
 })();
