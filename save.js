@@ -8,77 +8,64 @@
   // =========================
   function buildSaveData() {
     return {
-      // currency
       candyOrbs: state.candyOrbs,
       totalCandyEarned: state.totalCandyEarned,
 
-      // click stats
       clickPower: state.clickPower,
       critChance: state.critChance,
       critMult: state.critMult,
+
+      prestige: state.prestige,
+      prestigePoints: state.prestigePoints,
+
+      totalClicks: state.totalClicks,
+      totalEarned: state.totalEarned,
+      totalSpent: state.totalSpent,
+
+      totalCrits: state.totalCrits,
+      totalSold: state.totalSold,
+      totalSoldValue: state.totalSoldValue,
+
+      hotStreak: state.hotStreak,
+      bestHotStreak: state.bestHotStreak,
 
       // combo system
       combo: state.combo ?? 0,
       comboMult: state.comboMult ?? 1,
       bestCombo: state.bestCombo ?? 0,
-      comboLevel: state.comboLevel ?? 0,
-      comboExpiresAt: state.comboExpiresAt ?? 0,
-
-      // prestige
-      prestige: state.prestige,
-      prestigePoints: state.prestigePoints,
-      lastPrestigeEarned: state.lastPrestigeEarned ?? 0,
-
-      // totals
-      totalClicks: state.totalClicks,
-      totalEarned: state.totalEarned,
-      totalSpent: state.totalSpent,
-      totalCrits: state.totalCrits ?? 0,
-      totalSold: state.totalSold ?? 0,
-      totalSoldValue: state.totalSoldValue ?? 0,
-
-      // streaks
-      hotStreak: state.hotStreak,
-      bestHotStreak: state.bestHotStreak,
-
-      // gameplay
-      buyMode: state.buyMode ?? 1,
-      paused: state.paused ?? false,
-      reduceMotion: state.reduceMotion ?? false,
 
       // settings
-      sound: state.sound ?? true,
-      soundVolume: state.soundVolume ?? 0.4,
-      clickSoundVol: state.clickSoundVol ?? 1,
-      buySoundVol: state.buySoundVol ?? 0.5,
-      critSoundVol: state.critSoundVol ?? 0.5,
-      prestigeSoundVol: state.prestigeSoundVol ?? 0.5,
+      useShortFormat: state.useShortFormat,
+      sound: state.sound,
+      soundVolume: state.soundVolume,
+      clickSoundVol: state.clickSoundVol,
+      buySoundVol: state.buySoundVol,
+      critSoundVol: state.critSoundVol,
+      prestigeSoundVol: state.prestigeSoundVol,
 
-      particles: state.particles ?? true,
-      waterfall: state.waterfall ?? true,
-      autoSave: state.autoSave ?? true,
-      useShortFormat: state.useShortFormat ?? true,
+      particles: state.particles,
+      autoSave: state.autoSave,
+      waterfall: state.waterfall,
+      paused: state.paused,
+      reduceMotion: state.reduceMotion,
 
       // unlocks
-      waterfallUnlocked: state.waterfallUnlocked ?? false,
+      waterfallUnlocked: state.waterfallUnlocked,
 
-      // collections
+      // arrays
       buildings: state.buildings.map(b => ({
         id: b.id,
-        count: b.count ?? 0,
+        count: b.count,
         bonusMult: b.bonusMult ?? 1
       })),
 
-      clickUpgradesBought: Array.from(state.clickUpgradesBought || []),
-      prestigeUpgradesBought: Array.from(state.prestigeUpgradesBought || []),
-      achievementsDone: Array.from(state.achievementsDone || []),
+      clickUpgradesBought: Array.from(state.clickUpgradesBought),
+      prestigeUpgradesBought: Array.from(state.prestigeUpgradesBought),
+      achievementsDone: Array.from(state.achievementsDone),
 
       // time
-      startedAt: state.startedAt ?? Date.now(),
-      lastOnline: Date.now(),
-
-      // version
-      version: 2
+      startedAt: state.startedAt,
+      lastSave: Date.now()
     };
   }
 
@@ -87,8 +74,6 @@
   // =========================
   function saveGame() {
     try {
-      if (state.autoSave === false) return;
-
       const data = buildSaveData();
 
       localStorage.setItem(
@@ -108,50 +93,24 @@
     try {
       const raw = localStorage.getItem(SAVE_KEY);
 
-      if (!raw) {
-        console.log("No save found.");
-        return;
-      }
+      if (!raw) return;
 
       const data = JSON.parse(raw);
 
-      // =====================
-      // BASIC
-      // =====================
-
+      // currency
       state.candyOrbs = data.candyOrbs ?? 0;
       state.totalCandyEarned = data.totalCandyEarned ?? 0;
 
-      // =====================
-      // CLICK
-      // =====================
-
+      // click
       state.clickPower = data.clickPower ?? 1;
       state.critChance = data.critChance ?? 0.10;
       state.critMult = data.critMult ?? 1;
 
-      // =====================
-      // COMBO
-      // =====================
-
-      state.combo = data.combo ?? 0;
-      state.comboMult = data.comboMult ?? 1;
-      state.bestCombo = data.bestCombo ?? 0;
-      state.comboLevel = data.comboLevel ?? 0;
-      state.comboExpiresAt = data.comboExpiresAt ?? 0;
-
-      // =====================
-      // PRESTIGE
-      // =====================
-
+      // prestige
       state.prestige = data.prestige ?? 0;
       state.prestigePoints = data.prestigePoints ?? 0;
-      state.lastPrestigeEarned = data.lastPrestigeEarned ?? 0;
 
-      // =====================
-      // TOTALS
-      // =====================
-
+      // totals
       state.totalClicks = data.totalClicks ?? 0;
       state.totalEarned = data.totalEarned ?? 0;
       state.totalSpent = data.totalSpent ?? 0;
@@ -160,16 +119,17 @@
       state.totalSold = data.totalSold ?? 0;
       state.totalSoldValue = data.totalSoldValue ?? 0;
 
-      // =====================
-      // STREAKS
-      // =====================
-
+      // streaks
       state.hotStreak = data.hotStreak ?? 0;
       state.bestHotStreak = data.bestHotStreak ?? 0;
 
-      // =====================
-      // SETTINGS
-      // =====================
+      // combo
+      state.combo = data.combo ?? 0;
+      state.comboMult = data.comboMult ?? 1;
+      state.bestCombo = data.bestCombo ?? 0;
+
+      // settings
+      state.useShortFormat = data.useShortFormat ?? true;
 
       state.sound = data.sound ?? true;
       state.soundVolume = data.soundVolume ?? 0.4;
@@ -180,29 +140,17 @@
       state.prestigeSoundVol = data.prestigeSoundVol ?? 0.5;
 
       state.particles = data.particles ?? true;
-      state.waterfall = data.waterfall ?? true;
       state.autoSave = data.autoSave ?? true;
-      state.useShortFormat = data.useShortFormat ?? true;
+      state.waterfall = data.waterfall ?? true;
 
-      // =====================
-      // GAMEPLAY
-      // =====================
-
-      state.buyMode = data.buyMode ?? 1;
       state.paused = data.paused ?? false;
       state.reduceMotion = data.reduceMotion ?? false;
 
-      // =====================
-      // UNLOCKS
-      // =====================
-
+      // unlocks
       state.waterfallUnlocked =
         data.waterfallUnlocked ?? false;
 
-      // =====================
-      // BUILDINGS
-      // =====================
-
+      // buildings
       if (Array.isArray(data.buildings)) {
 
         data.buildings.forEach((savedBuilding) => {
@@ -221,10 +169,7 @@
         });
       }
 
-      // =====================
-      // SETS
-      // =====================
-
+      // sets
       state.clickUpgradesBought =
         new Set(data.clickUpgradesBought || []);
 
@@ -234,49 +179,42 @@
       state.achievementsDone =
         new Set(data.achievementsDone || []);
 
-      // =====================
-      // TIME
-      // =====================
-
+      // time
       state.startedAt =
         data.startedAt ?? Date.now();
 
-      // =====================
-      // OFFLINE PROGRESS
-      // =====================
-
-      const now = Date.now();
-
-      const lastOnline =
-        data.lastOnline ?? now;
-
-      const secondsOffline =
-        Math.floor((now - lastOnline) / 1000);
-
-      const cappedOffline =
-        Math.min(secondsOffline, 7200);
-
+      // offline progress
       if (
-        cappedOffline > 5 &&
+        data.lastSave &&
         window.COI?.econ?.getCPS
       ) {
-        const cps = window.COI.econ.getCPS();
-
-        const earnedOffline =
-          cps * cappedOffline;
-
-        state.candyOrbs += earnedOffline;
-        state.totalEarned += earnedOffline;
-        state.totalCandyEarned += earnedOffline;
-
-        if (window.COI?.ui?.msg) {
-          window.COI.ui.msg(
-            `Offline Progress: +${window.COI.econ.formatNumber(earnedOffline)}`
+        const secondsOffline =
+          Math.floor(
+            (Date.now() - data.lastSave) / 1000
           );
+
+        const cappedSeconds =
+          Math.min(secondsOffline, 7200);
+
+        if (cappedSeconds > 5) {
+
+          const cps =
+            window.COI.econ.getCPS();
+
+          const earned =
+            cps * cappedSeconds;
+
+          state.candyOrbs += earned;
+          state.totalEarned += earned;
+          state.totalCandyEarned += earned;
+
+          if (window.COI?.ui?.msg) {
+            window.COI.ui.msg(
+              `Offline Progress +${window.COI.econ.formatNumber(earned)}`
+            );
+          }
         }
       }
-
-      console.log("Save loaded.");
 
     } catch (e) {
 
@@ -290,22 +228,18 @@
   // EXPORT SAVE
   // =========================
   function exportState() {
-    return JSON.stringify(
-      buildSaveData()
-    );
+    return buildSaveData();
   }
 
   // =========================
   // IMPORT SAVE
   // =========================
-  function importState(json) {
-
+  function importState(data) {
     try {
 
-      const data =
-        typeof json === "string"
-          ? JSON.parse(json)
-          : json;
+      if (typeof data === "string") {
+        data = JSON.parse(data);
+      }
 
       localStorage.setItem(
         SAVE_KEY,
@@ -314,28 +248,16 @@
 
       loadGame();
 
-      saveGame();
-
-      console.log("Save imported.");
-
     } catch (e) {
 
       console.warn("Import failed:", e);
-
-      alert("Invalid save data.");
     }
   }
 
   // =========================
-  // HARD RESET
+  // RESET SAVE
   // =========================
   function resetSave() {
-
-    const confirmed = confirm(
-      "Delete your entire save?"
-    );
-
-    if (!confirmed) return;
 
     localStorage.removeItem(SAVE_KEY);
 
@@ -346,32 +268,15 @@
   // RESTART GAME
   // =========================
   function restartGame() {
+
+    const confirmed = confirm(
+      "Restart your entire save?"
+    );
+
+    if (!confirmed) return;
+
     resetSave();
   }
-
-  // =========================
-  // FORCE SAVE
-  // =========================
-  function forceSave() {
-    const old = state.autoSave;
-
-    state.autoSave = true;
-
-    saveGame();
-
-    state.autoSave = old;
-  }
-
-  // =========================
-  // AUTO SAVE LOOP
-  // =========================
-  setInterval(() => {
-
-    if (!state.autoSave) return;
-
-    saveGame();
-
-  }, 10000);
 
   // =========================
   // SAVE ON TAB CLOSE
@@ -379,19 +284,19 @@
   window.addEventListener(
     "beforeunload",
     () => {
-      forceSave();
+      saveGame();
     }
   );
 
   // =========================
-  // SAVE ON TAB HIDDEN
+  // SAVE WHEN TAB HIDDEN
   // =========================
   document.addEventListener(
     "visibilitychange",
     () => {
 
       if (document.hidden) {
-        forceSave();
+        saveGame();
       }
     }
   );
@@ -408,9 +313,7 @@
     importState,
 
     resetSave,
-    restartGame,
-
-    forceSave
+    restartGame
   };
 
 })();
