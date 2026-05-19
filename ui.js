@@ -3,43 +3,44 @@
   const state = COI.state;
   const els = COI.els;
   const econ = COI.econ;
+  const save = COI.save;
 
   function msg(text, good = true) {
     if (!els.msg) return;
     els.msg.textContent = text;
-    els.msg.style.color = good ? "#fff" : "#ff4d4d";
+    els.msg.style.color = good ? "#f472b6" : "#ef4444";
   }
 
-  // =========================
-  // HUD (FAST - NO FLICKER)
-  // =========================
   function updateHUD() {
-    if (!state) return;
+    if (!state || !els) return;
 
-    if (els.candyOrbs)
-      els.candyOrbs.textContent = econ.formatNumber(state.candyOrbs);
+    els.candyOrbs.textContent = econ.formatNumber(state.candyOrbs);
+    els.cps.textContent = econ.formatNumber(econ.getCPS(), 2);
+    els.clickPower.textContent = econ.formatNumber(state.clickPower);
 
-    if (els.cps)
-      els.cps.textContent = econ.formatNumber(econ.getCPS(), 2);
+    els.critChance.textContent =
+      (state.critChance * 100).toFixed(1) + "%";
 
-    if (els.clickPower)
-      els.clickPower.textContent = econ.formatNumber(state.clickPower);
+    els.prestigeLevel.textContent = state.prestige;
+    els.prestigeTop.textContent = state.prestige;
+
+    if (els.hotStreak) {
+      els.hotStreak.textContent = state.hotStreak || 0;
+    }
   }
 
-  // =========================
-  // SHOP (FIXED - NO GLITCH)
-  // =========================
   function renderShop() {
     if (!els.shop) return;
 
+    const scroll = els.shop.scrollTop;
     let html = "";
 
-    for (const b of state.buildings || []) {
+    for (const b of state.buildings) {
       const cost = econ.getBuildingTotalCost(b, 1);
       const canBuy = state.candyOrbs >= cost;
 
       html += `
-        <div class="card">
+        <div class="building-card">
           <div>${b.name} (${b.count})</div>
 
           <button data-buy="${b.id}" ${!canBuy ? "disabled" : ""}>
@@ -54,52 +55,28 @@
     }
 
     els.shop.innerHTML = html;
-
-    els.shop.querySelectorAll("[data-buy]").forEach(btn => {
-      btn.onclick = () => COI.main.buyBuilding(btn.dataset.buy);
-    });
-
-    els.shop.querySelectorAll("[data-sell]").forEach(btn => {
-      btn.onclick = () => COI.main.sellBuilding(btn.dataset.sell);
-    });
+    els.shop.scrollTop = scroll;
   }
 
-  function refreshShopUI() {
-    renderShop();
-  }
-
-  // =========================
-  // UPGRADES
-  // =========================
   function renderUpgrades() {
     if (!els.upgrades) return;
 
     let html = "";
 
-    for (const u of state.upgrades || []) {
+    for (const u of state.upgrades) {
       const owned = state.clickUpgradesBought.has(u.id);
+      const canBuy = state.candyOrbs >= u.cost && !owned;
 
       html += `
-        <button data-upg="${u.id}" ${owned ? "disabled" : ""}>
+        <button data-upgrade="${u.id}" ${!canBuy ? "disabled" : ""}>
           ${u.name} - ${econ.formatNumber(u.cost)}
         </button>
       `;
     }
 
     els.upgrades.innerHTML = html;
-
-    els.upgrades.querySelectorAll("[data-upg]").forEach(btn => {
-      btn.onclick = () => COI.main.buyUpgrade(btn.dataset.upg);
-    });
   }
 
-  function refreshUpgradesUI() {
-    renderUpgrades();
-  }
-
-  // =========================
-  // MASTER UPDATE
-  // =========================
   function updateAll() {
     updateHUD();
     renderShop();
@@ -110,9 +87,7 @@
     msg,
     updateHUD,
     renderShop,
-    refreshShopUI,
     renderUpgrades,
-    refreshUpgradesUI,
     updateAll
   };
 })();
