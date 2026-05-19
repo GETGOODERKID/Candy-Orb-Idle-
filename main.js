@@ -1,35 +1,20 @@
 (() => {
-  const { els, state } = window.COI;
-  const econ = window.COI.econ;
-  const ui = window.COI.ui;
-  const fx = window.COI.fx;
-  const save = window.COI.save;
+  const COI = window.COI;
+  const state = COI.state;
+  const econ = COI.econ;
+  const ui = COI.ui;
+  const fx = COI.fx;
+  const save = COI.save;
 
   // =========================
-  // REGISTER MAIN API (CRITICAL FIX)
+  // MAIN API (CRITICAL FIX)
   // =========================
-  window.COI.main = {
+  COI.main = {
     buyBuilding,
     sellBuilding,
     buyUpgrade,
     prestigeReset
   };
-
-  // =========================
-  // COMBO UI (lightweight)
-  // =========================
-  function updateComboUI() {
-    const comboText = document.getElementById("comboText");
-    const comboBar = document.getElementById("comboBar");
-
-    const c = state.comboChain || 0;
-
-    if (comboText) comboText.textContent = `COMBO x${c}`;
-
-    if (comboBar) {
-      comboBar.style.width = Math.min(100, c * 5) + "%";
-    }
-  }
 
   // =========================
   // CLICK ORB
@@ -50,17 +35,18 @@
 
       mult = 2 + state.comboChain * 0.1;
 
+      ui.msg(`CRIT x${state.comboChain}`, true);
       fx?.playCritSound?.();
-      fx?.spawnParticle?.("CRIT", x, y, "#ffd");
-
+      fx?.spawnParticle?.("CRIT", x, y, "#ffd54a");
     } else {
       const broken = state.comboChain || 0;
 
       if (broken >= 3) {
-        state.candyOrbs += broken * 10;
+        state.candyOrbs += broken * 5;
       }
 
       state.comboChain = 0;
+      fx?.spawnParticle?.("+", x, y, "#fff");
     }
 
     const gain = state.clickPower * state.clickMult * mult;
@@ -69,7 +55,6 @@
     state.totalEarned += gain;
     state.totalCandyEarned += gain;
 
-    updateComboUI();
     ui.updateHUD();
   }
 
@@ -81,13 +66,13 @@
     if (!b) return;
 
     const cost = econ.getBuildingTotalCost(b, 1);
-
     if (state.candyOrbs < cost) return;
 
     state.candyOrbs -= cost;
     b.count++;
 
     ui.msg(`Bought ${b.name}`);
+    ui.refreshShopUI();
     ui.updateHUD();
   }
 
@@ -99,6 +84,7 @@
     state.candyOrbs += Math.floor(b.baseCost * 0.5);
 
     ui.msg(`Sold ${b.name}`);
+    ui.refreshShopUI();
     ui.updateHUD();
   }
 
@@ -116,7 +102,8 @@
 
     upg.effect();
 
-    ui.msg(`Upgrade bought`);
+    ui.msg(`Upgrade purchased`);
+    ui.refreshUpgradesUI();
     ui.updateHUD();
   }
 
@@ -137,42 +124,24 @@
   }
 
   // =========================
-  // CLICK EVENTS (ONLY ONCE)
+  // CLICK BIND
   // =========================
   const orb = document.getElementById("orbImg");
   if (orb) orb.addEventListener("click", clickOrb);
 
-  document.addEventListener("click", (e) => {
-    const buy = e.target.closest("[data-buy]");
-    const sell = e.target.closest("[data-sell]");
-    const upg = e.target.closest("[data-upg]");
-
-    if (buy) buyBuilding(buy.dataset.buy);
-    if (sell) sellBuilding(sell.dataset.sell);
-    if (upg) buyUpgrade(upg.dataset.upg);
-  });
-
   // =========================
-  // GAME LOOP (NO UI SPAM FIX)
+  // GAME LOOP (CLEAN)
   // =========================
   setInterval(() => {
     if (!state.paused) {
       state.candyOrbs += econ.getCPS() / 10;
-
-      if (state.comboTimer > 0) {
-        state.comboTimer -= 0.1;
-      }
     }
 
     state.lastTick = Date.now();
 
     ui.updateHUD();
-    updateComboUI();
   }, 100);
 
-  // =========================
-  // START
-  // =========================
   save.loadGame();
   ui.updateAll();
 })();
