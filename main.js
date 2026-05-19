@@ -1,190 +1,339 @@
 (() => {
-  const COI = window.COI;
+  const { els, state } = window.COI;
+  const { econ, ui, fx, save } = window.COI;
 
-  const state = COI.state;
-  const els = COI.els;
-  const econ = COI.econ;
-  const fx = COI.fx;
-  const save = COI.save;
-  const ui = COI.ui;
+  // -------------------------
+  // ACHIEVEMENTS
+  // -------------------------
+  function checkAchievements() {
+    const list = window.COI.achievements || [];
 
-  // =========================
-  // ORB CLICK
-  // =========================
-  function clickOrb(e) {
-    const x = e?.clientX || innerWidth / 2;
-    const y = e?.clientY || innerHeight / 2;
+    for (const a of list) {
+      if (
+        !state.achievementsDone.has(a.id) &&
+        a.check({
+          state,
+          getCPS: econ.getCPS,
+          getBuildingCount: econ.getBuildingCount
+        })
+      ) {
+        state.achievementsDone.add(a.id);
+        a.reward({
+          updateAchievementBonus: econ.updateAchievementBonus
+        });
 
-    let gain = state.clickPower * state.clickMult;
-
-    const crit = Math.random() < state.critChance;
-
-    if (crit) {
-      gain *= state.critMult || 2;
-
-      state.totalCrits++;
-
-      fx?.playCritSound?.();
-      fx?.spawnParticle?.("CRIT!", x, y, "#fbbf24");
-
-      ui.msg("Critical hit!");
-    } else {
-      fx?.spawnParticle?.("+", x, y, "#fff");
+        ui.msg(`Achievement: ${a.name}`);
+        fx.playTone(880, 0.1, "triangle", 2);
+      }
     }
+  }
+
+  // -------------------------
+  // ORB CLICK
+  // -------------------------
+  function clickOrb(ev) {
+    state.totalClicks += 1;
+
+    const x = ev?.clientX ?? window.innerWidth / 2;
+    const y = ev?.clientY ?? window.innerHeight / 2;
+
+    let multiplier = 1;
+
+    const critRoll = Math.random();
+
+    if (critRoll < Math.min(0.99, state.critChance)) {
+      state.totalCrits += 1;
+      state.hotStreak += 1;
+
+      if (state.hotStreak > state.bestHotStreak) {
+        state.bestHotStreak = state.hotStreak;
+      }
+
+      multiplier = Math.max(2, Math.round(2 * state.critMult));
+
+      fx.playCritSound();
+      fx.shake();
+      fx.spawnParticle(`x${multiplier}`, x, y, "#f1c04d");
+      ui.msg(`Crit x${multiplier}`);
+    } else {
+      state.hotStreak = 0;
+      fx.spawnParticle("+", x, y);
+    }
+
+    const gain = state.clickPower * state.clickMult * multiplier;
 
     state.candyOrbs += gain;
     state.totalEarned += gain;
-    state.totalCandyEarned += gain;
+    state.totalCandyEarned += gain; // ✅ IMPORTANT FIX
 
+    fx.playClickSound();
+
+    checkAchievements();
     ui.updateHUD();
   }
 
-  // =========================
+  // -------------------------
   // BUILDINGS
-  // =========================
+  // -------------------------
   function buyBuilding(id) {
     const b = econ.getBuilding(id);
     if (!b) return;
 
-    const cost = econ.getBuildingTotalCost(b, 1);
-    if (state.candyOrbs < cost) {
-      ui.msg("Not enough Candy Orbs", false);
+    if (econ.isBuildingLocked(b)) {
+      ui.msg(`Locked - earn ${econ.formatNumber(b.unlockAt)} first`, false);
       return;
     }
 
-    state.candyOrbs -= cost;
-    b.count++;
+    const amount = ui.getResolvedBuyCount(b);
+    if (amount <= 0) {
+      ui.msg("Can't buy any right now", false);
+      return;
+    }
 
-    ui.msg("Bought " + b.name);
+    const price = econ.getBuildingTotalCost(b, amount);
 
-    ui.refreshShopUI();
-    ui.updateHUD();
+    if (state.candyOrbs < price) {
+      ui.msg(`Need ${econ.formatNumber(price - state.candyOrbs)} more`, false);
+      return;
+    }
+
+    state.candyOrbs -= price;
+    state.totalSpent += price;
+
+    b.count += amount;
+
+    fx.playBuySound();
+    ui.msg(`${b.name} x${amount} (${b.count})`);
+
+    ui.updateAll();
   }
 
   function sellBuilding(id) {
     const b = econ.getBuilding(id);
-    if (!b || b.count <= 0) return;
+    if (!b || b.count === 0) return;
 
-    const refund = econ.getBuildingSellRefund(b, 1);
+    const amount = Math.min(b.count, ui.getResolvedSellCount(b));
+    const refund = econ.getBuildingSellRefund(b, amount);
 
-    b.count--;
     state.candyOrbs += refund;
+    b.count -= amount;
 
-    ui.msg("Sold " + b.name);
+    state.totalSold += amount;
+    state.totalSoldValue += refund;
 
-    ui.refreshShopUI();
-    ui.updateHUD();
+    fx.playBuySound();
+    ui.msg(`Sold x${amount}`);
+
+    ui.updateAll();
   }
 
-  // =========================
+  // -------------------------
   // UPGRADES
-  // =========================
+  // -------------------------
   function buyUpgrade(id) {
-    const u = state.upgrades.find(x => x.id === id);
-    if (!u || state.clickUpgradesBought.has(id)) return;
+    const upg = state.upgrades.find(u => u.id === id);
+    if (!upg) return;
 
-    if (state.candyOrbs < u.cost) return;
+    if (state.clickUpgradesBought.has(id)) return;
 
-    state.candyOrbs -= u.cost;
+    if (state.candyOrbs < upg.cost) {
+      ui.msg(`Need ${econ.formatNumber(upg.cost - state.candyOrbs)} more`, false);
+      return;
+    }
+
+    state.candyOrbs -= upg.cost;
+    state.totalSpent += upg.cost;
+
     state.clickUpgradesBought.add(id);
+    upg.effect();
 
-    u.effect?.();
+    fx.playBuySound();
+    ui.msg(`${upg.name} unlocked`);
 
-    ui.msg("Upgrade bought");
-
-    ui.refreshUpgradesUI();
-    ui.updateHUD();
+    ui.updateAll();
   }
 
-  // =========================
-  // TAB SYSTEM (FIXED)
-  // =========================
-  function bindTabs() {
-    document.querySelectorAll(".tab").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const tab = btn.dataset.tab;
+  // -------------------------
+  // PRESTIGE
+  // -------------------------
+  function prestigeReset() {
+    const gain = econ.getPrestigeGain();
 
-        document.querySelectorAll(".panel").forEach(p => {
-          p.classList.remove("active");
-        });
+    if (gain < 1) {
+      ui.msg("Need 100,000 earned to prestige", false);
+      return;
+    }
 
-        document.getElementById(tab)?.classList.add("active");
+    if (!confirm(`Prestige for ${gain} point(s)?`)) return;
 
-        document.querySelectorAll(".tab").forEach(t => {
-          t.classList.remove("active");
-        });
+    state.prestige += gain;
+    state.prestigePoints += gain;
+    state.lastPrestigeEarned = state.prestigePoints;
 
-        btn.classList.add("active");
-      });
+    state.totalEarned = 0;
+    state.totalCandyEarned = 0;
+
+    state.candyOrbs = 0;
+    state.clickPower = 1;
+    state.critChance = 0.10;
+    state.critMult = 1;
+    state.hotStreak = 0;
+
+    state.clickUpgradesBought.clear();
+
+    for (const b of state.buildings) {
+      b.count = 0;
+      b.bonusMult = 1;
+    }
+
+    fx.playPrestigeSound();
+    fx.shake();
+
+    ui.msg(`Prestige +${gain}`);
+
+    ui.updateAll();
+    save.saveGame();
+  }
+
+  function buyPrestigeUpgrade(id) {
+    const upg = state.prestigeUpgrades.find(p => p.id === id);
+    if (!upg) return;
+
+    if (state.prestigeUpgradesBought.has(id)) return;
+
+    if (state.prestigePoints < upg.cost) {
+      ui.msg(`Need ${upg.cost - state.prestigePoints} more`, false);
+      return;
+    }
+
+    state.prestigePoints -= upg.cost;
+    state.prestigeUpgradesBought.add(id);
+
+    upg.effect();
+
+    fx.playPrestigeSound();
+    ui.msg(`${upg.name} purchased`);
+
+    ui.updateAll();
+  }
+
+  // -------------------------
+  // WATERFALL FIX (IMPORTANT PART)
+  // -------------------------
+  function updateWaterfall() {
+    if (!state.waterfallUnlocked && state.totalCandyEarned >= 1000) {
+      state.waterfallUnlocked = true;
+      ui.msg("🌊 Waterfall Unlocked!");
+    }
+
+    if (state.waterfallUnlocked) {
+      fx.spawnWaterfall(state.lastTick);
+    }
+  }
+
+  // -------------------------
+  // EVENT HANDLERS
+  // -------------------------
+  function attachDelegatedHandlers() {
+    els.shop.addEventListener("click", (ev) => {
+      const target = ev.target.closest?.("button");
+      if (!target) return;
+
+      if (target.dataset.buyBuilding) buyBuilding(target.dataset.buyBuilding);
+      else if (target.dataset.sellBuilding) sellBuilding(target.dataset.sellBuilding);
+    });
+
+    els.upgrades.addEventListener("click", (ev) => {
+      const target = ev.target.closest?.("button");
+      if (!target) return;
+
+      if (target.dataset.buyUpgrade) buyUpgrade(target.dataset.buyUpgrade);
+    });
+
+    els.prestige.addEventListener("click", (ev) => {
+      const target = ev.target.closest?.("button");
+      if (!target) return;
+
+      if (target.id === "prestigeBtn") prestigeReset();
+      else if (target.dataset.buyPrestige) buyPrestigeUpgrade(target.dataset.buyPrestige);
     });
   }
 
-  // =========================
-  // HOTKEYS (1–4 RESTORED)
-  // =========================
-  function bindHotkeys() {
-    document.addEventListener("keydown", (e) => {
-      if (e.repeat) return;
+  // -------------------------
+  // TABS
+  // -------------------------
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
 
-      if (e.key === "1") ui.setBuyMode(1);
-      if (e.key === "2") ui.setBuyMode(10);
-      if (e.key === "3") ui.setBuyMode(100);
-      if (e.key === "4") ui.setBuyMode("max");
+      tab.classList.add("active");
+
+      const panel = document.getElementById(tab.dataset.tab);
+      if (panel) panel.classList.add("active");
     });
-  }
+  });
 
-  // =========================
-  // GAME LOOP (SMOOTHED)
-  // =========================
-  let last = performance.now();
+  // -------------------------
+  // ORB CLICK
+  // -------------------------
+  const orbImg = document.getElementById("orbImg");
+  const orbFallback = document.getElementById("orbFallback");
 
-  function loop(now) {
-    const delta = (now - last) / 1000;
-    last = now;
+  orbImg.addEventListener("click", clickOrb);
+  orbFallback.addEventListener("click", clickOrb);
 
+  orbImg.addEventListener("error", () => {
+    orbImg.style.display = "none";
+    orbFallback.style.display = "block";
+  });
+
+  // -------------------------
+  // KEYBINDS
+  // -------------------------
+  document.addEventListener("keydown", (ev) => {
+    if (!els.shop.classList.contains("active")) return;
+
+    if (ev.key === "1") ui.setBuyMode(1);
+    else if (ev.key === "2") ui.setBuyMode(10);
+    else if (ev.key === "3") ui.setBuyMode(100);
+    else if (ev.key === "4") ui.setBuyMode("max");
+  });
+
+  attachDelegatedHandlers();
+
+  // -------------------------
+  // GAME LOOP
+  // -------------------------
+  setInterval(() => {
     if (!state.paused) {
       const cps = econ.getCPS();
-      const gain = cps * delta;
+      const gain = cps / 10;
 
       state.candyOrbs += gain;
       state.totalEarned += gain;
-      state.totalCandyEarned += gain;
+      state.totalCandyEarned += gain; // ✅ IMPORTANT FIX
 
-      ui.updateHUD();
+      updateWaterfall(); // 🌊 FIXED HERE
     }
 
-    requestAnimationFrame(loop);
-  }
+    state.lastTick = Date.now();
 
-  // =========================
-  // BIND EVENTS
-  // =========================
-  function bind() {
-    els.orbImg?.addEventListener("click", clickOrb);
+    ui.updateHUD();
+    ui.refreshShopUI();
+    ui.refreshUpgradesUI();
 
-    els.shop?.addEventListener("click", (e) => {
-      const buy = e.target.closest("[data-buy]");
-      const sell = e.target.closest("[data-sell]");
+    checkAchievements();
+  }, 100);
 
-      if (buy) buyBuilding(buy.dataset.buy);
-      if (sell) sellBuilding(sell.dataset.sell);
-    });
+  // -------------------------
+  // SAVE LOOP
+  // -------------------------
+  setInterval(save.saveGame, 10000);
 
-    els.upgrades?.addEventListener("click", (e) => {
-      const u = e.target.closest("[data-upg]");
-      if (u) buyUpgrade(u.dataset.upg);
-    });
-  }
-
-  // =========================
-  // START
-  // =========================
-  bind();
-  bindTabs();
-  bindHotkeys();
-
+  // -------------------------
+  // BOOT
+  // -------------------------
+  save.loadGame();
   ui.updateAll();
-
-  requestAnimationFrame(loop);
-
 })();
