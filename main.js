@@ -1,69 +1,97 @@
 (() => {
+
+  // =========================
+  // SAFE REFERENCES
+  // =========================
+
   const { els, state } = window.COI;
-  const { econ, ui, fx, save } = window.COI;
+
+  const econ = window.COI.econ;
+  const fx = window.COI.fx;
+  const save = window.COI.save;
+
+  // IMPORTANT:
+  // DO NOT CACHE ui HERE
+  // ui.js loads later sometimes
 
   // =========================
   // COMBO UI
   // =========================
+
   const comboText = document.getElementById("comboText");
   const comboBar = document.getElementById("comboBar");
 
-  // initialize safely
-  state.comboChain ??= 0;
-  state.comboTimer ??= 0;
-  state.bestCombo ??= 0;
-
   function updateComboUI() {
+
+    const combo = state.comboChain || 0;
+
     if (comboText) {
-      comboText.textContent = `COMBO x${state.comboChain}`;
+      comboText.textContent = `COMBO x${combo}`;
     }
 
     if (comboBar) {
-      const percent = Math.min(100, state.comboChain * 4);
+
+      const percent = Math.min(100, combo * 5);
+
       comboBar.style.width = percent + "%";
+
+      if (combo >= 20) {
+        comboBar.style.filter = "brightness(1.8)";
+      } else {
+        comboBar.style.filter = "brightness(1)";
+      }
+
     }
+
   }
 
   // =========================
   // COMBO EXPLOSION
   // =========================
+
   function comboExplosion(amount, x, y) {
+
     if (!amount || amount < 5) return;
 
-    const bonus =
+    const explosionBonus =
       amount *
       state.clickPower *
       state.clickMult *
-      Math.max(1, amount * 0.4);
+      4;
 
-    state.candyOrbs += bonus;
-    state.totalEarned += bonus;
-    state.totalCandyEarned += bonus;
+    state.candyOrbs += explosionBonus;
+    state.totalEarned += explosionBonus;
+    state.totalCandyEarned += explosionBonus;
 
     fx.shake();
 
-    fx.playTone(120, 0.25, "sawtooth", 0.5);
-    fx.playTone(220, 0.25, "triangle", 0.4);
+    window.COI.ui.msg(
+      `💥 COMBO EXPLOSION x${amount} +${Math.floor(explosionBonus)}`
+    );
 
-    ui.msg(`💥 COMBO EXPLOSION x${amount} +${econ.formatNumber(bonus)}`);
+    for (let i = 0; i < Math.min(amount, 25); i++) {
 
-    for (let i = 0; i < Math.min(40, amount * 2); i++) {
       fx.spawnParticle(
-        `+${Math.floor(bonus / 10)}`,
-        x + (Math.random() * 300 - 150),
-        y + (Math.random() * 300 - 150),
+        `+${Math.floor(explosionBonus / 10)}`,
+        x + (Math.random() * 240 - 120),
+        y + (Math.random() * 240 - 120),
         "#fbbf24"
       );
+
     }
+
   }
 
   // =========================
   // ACHIEVEMENTS
   // =========================
+
   function checkAchievements() {
+
     const list = window.COI.achievements || [];
 
     for (const a of list) {
+
       if (
         !state.achievementsDone.has(a.id) &&
         a.check({
@@ -72,80 +100,76 @@
           getBuildingCount: econ.getBuildingCount
         })
       ) {
+
         state.achievementsDone.add(a.id);
 
         a.reward({
           updateAchievementBonus: econ.updateAchievementBonus
         });
 
-        ui.msg(`Achievement: ${a.name}`);
+        fx.playTone(900, 0.12, "triangle", 2);
 
-        fx.playTone(880, 0.1, "triangle", 2);
+        window.COI.ui.msg(`🏆 ${a.name}`);
+
       }
+
     }
+
   }
 
   // =========================
-  // ORB CLICK
+  // CLICK ORB
   // =========================
+
   function clickOrb(ev) {
+
     state.totalClicks += 1;
 
-    const x = ev?.clientX ?? window.innerWidth / 2;
-    const y = ev?.clientY ?? window.innerHeight / 2;
+    const x = ev?.clientX || window.innerWidth / 2;
+    const y = ev?.clientY || window.innerHeight / 2;
 
     let multiplier = 1;
 
-    const critRoll = Math.random();
+    const crit = Math.random() < Math.min(0.99, state.critChance);
 
     // =========================
-    // CRIT SUCCESS
+    // CRIT
     // =========================
-    if (critRoll < Math.min(0.99, state.critChance)) {
+
+    if (crit) {
 
       state.totalCrits += 1;
+
       state.hotStreak += 1;
 
-      // combo system
-      state.comboChain += 1;
-      state.comboTimer = 2;
+      state.comboChain = (state.comboChain || 0) + 1;
+
+      state.comboTimer = 1.5;
+
+      if (!state.bestCombo) {
+        state.bestCombo = 0;
+      }
 
       if (state.comboChain > state.bestCombo) {
         state.bestCombo = state.comboChain;
       }
 
-      if (state.hotStreak > state.bestHotStreak) {
-        state.bestHotStreak = state.hotStreak;
-      }
+      const comboMult =
+        1 + (state.comboChain * 0.12);
 
-      // combo scaling
-      const comboBoost =
-        1 +
-        Math.min(10, state.comboChain * 0.15);
-
-      multiplier = Math.max(
-        2,
-        Math.round(
-          2 *
-          state.critMult *
-          comboBoost
-        )
-      );
-
-      // massive combos
-      if (state.comboChain >= 25) {
-        multiplier *= 2;
-      }
-
-      if (state.comboChain >= 50) {
-        multiplier *= 2;
-      }
+      multiplier =
+        Math.max(
+          2,
+          Math.round(
+            2 *
+            state.critMult *
+            comboMult
+          )
+        );
 
       fx.playCritSound();
 
-      if (state.comboChain >= 8) {
-        fx.shake();
-      }
+      fx.shake();
 
       fx.spawnParticle(
         `COMBO x${state.comboChain}`,
@@ -154,167 +178,215 @@
         "#f1c04d"
       );
 
-      fx.spawnParticle(
-        `CRIT x${multiplier}`,
-        x,
-        y - 40,
-        "#ffffff"
+      if (state.comboChain >= 10) {
+
+        fx.spawnParticle(
+          "INSANE!",
+          x,
+          y - 80,
+          "#ff4d6d"
+        );
+
+      }
+
+      window.COI.ui.msg(
+        `🔥 Combo x${state.comboChain}`
       );
 
-      ui.msg(
-        `🔥 Combo x${state.comboChain} • Crit x${multiplier}`
-      );
+    }
 
-    } else {
+    // =========================
+    // NORMAL HIT
+    // =========================
 
-      // =========================
-      // COMBO BREAK
-      // =========================
+    else {
+
       state.hotStreak = 0;
 
-      const broken = state.comboChain;
+      const broken = state.comboChain || 0;
 
       comboExplosion(broken, x, y);
 
       state.comboChain = 0;
-      state.comboTimer = 0;
 
-      fx.spawnParticle("+", x, y);
+      fx.spawnParticle(
+        "+",
+        x,
+        y,
+        "#ffffff"
+      );
+
     }
 
     // =========================
-    // FINAL GAIN
+    // GAIN
     // =========================
+
     const gain =
       state.clickPower *
       state.clickMult *
       multiplier;
 
     state.candyOrbs += gain;
+
     state.totalEarned += gain;
+
     state.totalCandyEarned += gain;
 
     // =========================
-    // WATERFALL UNLOCK
+    // WATERFALL
     // =========================
+
     if (
       !state.waterfallUnlocked &&
       state.totalCandyEarned >= 1000
     ) {
+
       state.waterfallUnlocked = true;
 
-      ui.msg("🌊 Waterfall Unlocked!");
+      window.COI.ui.msg(
+        "🌊 Waterfall Unlocked!"
+      );
 
       save.saveGame();
+
     }
+
+    // =========================
+    // FX
+    // =========================
 
     fx.playClickSound();
 
+    updateComboUI();
+
     checkAchievements();
 
-    ui.updateHUD();
+    window.COI.ui.updateHUD();
 
-    updateComboUI();
   }
 
   // =========================
   // BUILDINGS
   // =========================
+
   function buyBuilding(id) {
+
     const b = econ.getBuilding(id);
 
     if (!b) return;
 
     if (econ.isBuildingLocked(b)) {
-      ui.msg(
-        `Locked - earn ${econ.formatNumber(b.unlockAt)} first`,
+
+      window.COI.ui.msg(
+        `Need ${econ.formatNumber(b.unlockAt)}`,
         false
       );
+
       return;
+
     }
 
-    const amount = ui.getResolvedBuyCount(b);
+    const amount =
+      window.COI.ui.getResolvedBuyCount(b);
 
-    if (amount <= 0) {
-      ui.msg("Can't buy any right now", false);
-      return;
-    }
+    if (amount <= 0) return;
 
     const price =
       econ.getBuildingTotalCost(b, amount);
 
     if (state.candyOrbs < price) {
-      ui.msg(
+
+      window.COI.ui.msg(
         `Need ${econ.formatNumber(price - state.candyOrbs)} more`,
         false
       );
+
       return;
+
     }
 
     state.candyOrbs -= price;
+
     state.totalSpent += price;
 
     b.count += amount;
 
     fx.playBuySound();
 
-    ui.msg(`${b.name} x${amount} (${b.count})`);
+    window.COI.ui.msg(
+      `${b.name} x${amount}`
+    );
 
-    ui.updateAll();
+    window.COI.ui.updateAll();
+
   }
 
   // =========================
   // SELL BUILDING
   // =========================
+
   function sellBuilding(id) {
+
     const b = econ.getBuilding(id);
 
-    if (!b || b.count === 0) return;
+    if (!b) return;
 
-    const amount = Math.min(
-      b.count,
-      ui.getResolvedSellCount(b)
-    );
+    if (b.count <= 0) return;
+
+    const amount =
+      Math.min(
+        b.count,
+        window.COI.ui.getResolvedSellCount(b)
+      );
 
     const refund =
       econ.getBuildingSellRefund(b, amount);
 
-    state.candyOrbs += refund;
-
     b.count -= amount;
 
+    state.candyOrbs += refund;
+
     state.totalSold += amount;
+
     state.totalSoldValue += refund;
 
     fx.playBuySound();
 
-    ui.msg(`Sold x${amount}`);
+    window.COI.ui.msg(
+      `Sold x${amount}`
+    );
 
-    ui.updateAll();
+    window.COI.ui.updateAll();
+
   }
 
   // =========================
   // BUY UPGRADE
   // =========================
+
   function buyUpgrade(id) {
+
     const upg =
       state.upgrades.find(u => u.id === id);
 
     if (!upg) return;
 
-    if (state.clickUpgradesBought.has(id)) {
-      return;
-    }
+    if (state.clickUpgradesBought.has(id)) return;
 
     if (state.candyOrbs < upg.cost) {
-      ui.msg(
-        `Need ${econ.formatNumber(upg.cost - state.candyOrbs)} more`,
+
+      window.COI.ui.msg(
+        `Need ${econ.formatNumber(upg.cost - state.candyOrbs)}`,
         false
       );
+
       return;
+
     }
 
     state.candyOrbs -= upg.cost;
+
     state.totalSpent += upg.cost;
 
     state.clickUpgradesBought.add(id);
@@ -323,319 +395,172 @@
 
     fx.playBuySound();
 
-    ui.msg(`${upg.name} unlocked`);
+    window.COI.ui.msg(
+      `${upg.name} purchased`
+    );
 
-    ui.updateAll();
+    window.COI.ui.updateAll();
+
   }
 
   // =========================
-  // BUY PRESTIGE UPGRADE
+  // PRESTIGE
   // =========================
-  function buyPrestigeUpgrade(id) {
-    const upg =
-      state.prestigeUpgrades.find(
-        p => p.id === id
-      );
 
-    if (!upg) return;
-
-    if (
-      state.prestigeUpgradesBought.has(id)
-    ) {
-      return;
-    }
-
-    if (state.prestigePoints < upg.cost) {
-      ui.msg(
-        `Need ${upg.cost - state.prestigePoints} more`,
-        false
-      );
-      return;
-    }
-
-    state.prestigePoints -= upg.cost;
-
-    state.prestigeUpgradesBought.add(id);
-
-    upg.effect();
-
-    fx.playPrestigeSound();
-
-    ui.msg(`${upg.name} purchased`);
-
-    ui.updateAll();
-  }
-
-  // =========================
-  // PRESTIGE RESET
-  // =========================
   function prestigeReset() {
-    const gain = econ.getPrestigeGain();
+
+    const gain =
+      econ.getPrestigeGain();
 
     if (gain < 1) {
-      ui.msg(
-        "Need 100,000 earned to prestige",
+
+      window.COI.ui.msg(
+        "Need 100,000 earned",
         false
       );
+
       return;
+
     }
 
-    if (
-      !confirm(
-        `Prestige for ${gain} point(s)?`
-      )
-    ) {
+    if (!confirm(`Prestige for ${gain} points?`)) {
       return;
     }
 
     state.prestige += gain;
+
     state.prestigePoints += gain;
-
-    state.lastPrestigeEarned =
-      state.prestigePoints;
-
-    state.totalEarned = 0;
-    state.totalCandyEarned = 0;
 
     state.candyOrbs = 0;
 
-    state.clickPower = 1;
-    state.critChance = 0.10;
-    state.critMult = 1;
+    state.totalEarned = 0;
 
-    state.hotStreak = 0;
+    state.totalCandyEarned = 0;
 
     state.comboChain = 0;
-    state.comboTimer = 0;
 
-    state.clickUpgradesBought.clear();
+    state.bestCombo = 0;
 
     for (const b of state.buildings) {
       b.count = 0;
-      b.bonusMult = 1;
     }
 
     fx.playPrestigeSound();
 
     fx.shake();
 
-    ui.msg(`Prestige +${gain}`);
-
-    ui.updateAll();
+    window.COI.ui.msg(
+      `✨ Prestige +${gain}`
+    );
 
     save.saveGame();
+
+    window.COI.ui.updateAll();
+
   }
 
   // =========================
   // WATERFALL
   // =========================
+
   function updateWaterfall() {
 
     if (
-      !state.waterfallUnlocked &&
-      state.totalCandyEarned >= 1000
+      state.waterfallUnlocked
     ) {
-      state.waterfallUnlocked = true;
 
-      ui.msg("🌊 Waterfall Unlocked!");
+      fx.spawnWaterfall(
+        state.lastTick
+      );
 
-      save.saveGame();
     }
 
-    if (state.waterfallUnlocked) {
-      fx.spawnWaterfall(state.lastTick);
-    }
   }
 
   // =========================
-  // EVENT HANDLERS
+  // EVENTS
   // =========================
-  function attachDelegatedHandlers() {
 
-    els.shop.addEventListener("click", (ev) => {
-
-      const target =
-        ev.target.closest?.("button");
-
-      if (!target) return;
-
-      if (target.dataset.buyBuilding) {
-        buyBuilding(
-          target.dataset.buyBuilding
-        );
-      }
-
-      else if (
-        target.dataset.sellBuilding
-      ) {
-        sellBuilding(
-          target.dataset.sellBuilding
-        );
-      }
-    });
-
-    els.upgrades.addEventListener(
-      "click",
-      (ev) => {
-
-        const target =
-          ev.target.closest?.("button");
-
-        if (!target) return;
-
-        if (target.dataset.buyUpgrade) {
-          buyUpgrade(
-            target.dataset.buyUpgrade
-          );
-        }
-      }
-    );
-
-    els.prestige.addEventListener(
-      "click",
-      (ev) => {
-
-        const target =
-          ev.target.closest?.("button");
-
-        if (!target) return;
-
-        if (target.id === "prestigeBtn") {
-          prestigeReset();
-        }
-
-        else if (
-          target.dataset.buyPrestige
-        ) {
-          buyPrestigeUpgrade(
-            target.dataset.buyPrestige
-          );
-        }
-      }
-    );
-  }
-
-  // =========================
-  // TABS
-  // =========================
-  document
-    .querySelectorAll(".tab")
-    .forEach(tab => {
-
-      tab.addEventListener("click", () => {
-
-        document
-          .querySelectorAll(".tab")
-          .forEach(t =>
-            t.classList.remove("active")
-          );
-
-        document
-          .querySelectorAll(".panel")
-          .forEach(p =>
-            p.classList.remove("active")
-          );
-
-        tab.classList.add("active");
-
-        const panel =
-          document.getElementById(
-            tab.dataset.tab
-          );
-
-        if (panel) {
-          panel.classList.add("active");
-        }
-      });
-    });
-
-  // =========================
-  // ORB EVENTS
-  // =========================
-  const orbImg =
-    document.getElementById("orbImg");
-
-  const orbFallback =
-    document.getElementById("orbFallback");
-
-  if (orbImg) {
-    orbImg.addEventListener(
-      "click",
-      clickOrb
-    );
-
-    orbImg.addEventListener(
-      "error",
-      () => {
-        orbImg.style.display = "none";
-
-        if (orbFallback) {
-          orbFallback.style.display =
-            "block";
-        }
-      }
-    );
-  }
-
-  if (orbFallback) {
-    orbFallback.addEventListener(
+  if (els.orbImg) {
+    els.orbImg.addEventListener(
       "click",
       clickOrb
     );
   }
 
-  // =========================
-  // KEYBINDS
-  // =========================
-  document.addEventListener(
-    "keydown",
-    (ev) => {
+  if (els.shop) {
 
-      if (
-        !els.shop.classList.contains(
-          "active"
-        )
-      ) {
-        return;
+    els.shop.addEventListener("click", (e) => {
+
+      const buy =
+        e.target.closest("[data-buy-building]");
+
+      const sell =
+        e.target.closest("[data-sell-building]");
+
+      if (buy) {
+        buyBuilding(buy.dataset.buyBuilding);
       }
 
-      if (ev.key === "1") {
-        ui.setBuyMode(1);
+      if (sell) {
+        sellBuilding(sell.dataset.sellBuilding);
       }
 
-      else if (ev.key === "2") {
-        ui.setBuyMode(10);
+    });
+
+  }
+
+  if (els.upgrades) {
+
+    els.upgrades.addEventListener("click", (e) => {
+
+      const btn =
+        e.target.closest("[data-buy-upgrade]");
+
+      if (btn) {
+        buyUpgrade(btn.dataset.buyUpgrade);
       }
 
-      else if (ev.key === "3") {
-        ui.setBuyMode(100);
+    });
+
+  }
+
+  if (els.prestige) {
+
+    els.prestige.addEventListener("click", (e) => {
+
+      if (e.target.id === "prestigeBtn") {
+        prestigeReset();
       }
 
-      else if (ev.key === "4") {
-        ui.setBuyMode("max");
-      }
-    }
-  );
+    });
 
-  // IMPORTANT
-  attachDelegatedHandlers();
+  }
 
   // =========================
   // GAME LOOP
   // =========================
+
   setInterval(() => {
 
     if (!state.paused) {
 
-      const cps = econ.getCPS();
+      const cps =
+        econ.getCPS();
 
-      const gain = cps / 10;
+      const gain =
+        cps / 10;
 
       state.candyOrbs += gain;
+
       state.totalEarned += gain;
+
       state.totalCandyEarned += gain;
 
-      // combo decay
+      // =========================
+      // COMBO TIMER
+      // =========================
+
       if (state.comboTimer > 0) {
 
         state.comboTimer -= 0.1;
@@ -643,7 +568,7 @@
         if (state.comboTimer <= 0) {
 
           const broken =
-            state.comboChain;
+            state.comboChain || 0;
 
           comboExplosion(
             broken,
@@ -652,45 +577,43 @@
           );
 
           state.comboChain = 0;
-          state.comboTimer = 0;
 
-          updateComboUI();
         }
+
       }
 
+      updateComboUI();
+
       updateWaterfall();
+
     }
 
     state.lastTick = Date.now();
 
-    ui.updateHUD();
+    // SAFE UI CALLS
 
-    ui.refreshShopUI();
+    if (window.COI.ui) {
 
-    ui.refreshUpgradesUI();
+      window.COI.ui.updateHUD();
+
+      window.COI.ui.refreshShopUI();
+
+      window.COI.ui.refreshUpgradesUI();
+
+    }
 
     checkAchievements();
 
   }, 100);
 
   // =========================
-  // AUTO SAVE
+  // START
   // =========================
-  setInterval(() => {
 
-    if (state.autoSave !== false) {
-      save.saveGame();
-    }
-
-  }, 10000);
-
-  // =========================
-  // BOOT
-  // =========================
   save.loadGame();
 
-  ui.updateAll();
-
-  updateComboUI();
+  if (window.COI.ui) {
+    window.COI.ui.updateAll();
+  }
 
 })();
